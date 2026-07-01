@@ -1,0 +1,62 @@
+<?xml version="1.0"?>
+<mujoco model="plate">
+
+    <asset>
+
+        <!-- Plate mesh -->
+        <mesh
+            name="plate_mesh"
+            file="meshes/plate.stl"
+            scale="1 1 1"/>
+
+        <!-- Plate material -->
+        <material
+            name="plate_mat"
+            rgba="0.75 0.88 1.0 1"
+            specular="0.2"
+            shininess="0.4"/>
+
+    </asset>
+
+    <worldbody>
+        <body>
+            <body name="object">
+
+            <!-- <geom
+                name="plate"
+                type="mesh"
+                mesh="plate_mesh"
+                material="plate_mat"
+                density="800"
+                friction="1.2 0.005 0.0001"
+                condim="4"
+                group="0"
+                solref="0.002 1"
+                solimp="0.998 0.998 0.001"/> -->
+                <geom pos="0 0 0" mesh="plate_mesh" type="mesh" solimp="0.998 0.998 0.001" solref="0.001 1" density="800" friction="1.2 0.005 0.0001"  material="plate_mat" group="0" condim="4"/>
+                <!-- Required robosuite sites -->
+            </body>
+            
+            <site
+                name="bottom_site"
+                pos="0 0 -0.01"
+                size="0.005"
+                rgba="0 0 0 0"/>
+
+            <site
+                name="top_site"
+                pos="0 0 0.015"
+                size="0.005"
+                rgba="0 0 0 0"/>
+
+            <site
+                name="horizontal_radius_site"
+                pos="0.04 0 0"
+                size="0.005"
+                rgba="0 0 0 0"/>
+
+        </body>
+        
+    </worldbody>
+
+</mujoco>

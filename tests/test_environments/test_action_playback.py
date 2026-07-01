@@ -20,10 +20,10 @@ def test_playback():
     np.random.seed(0)
 
     env = robosuite.make(
-        "Lift",
-        robots=["Panda"],
+        "ServeBread",
+        robots=["Nero7"],
         controller_configs=load_composite_controller_config(controller="BASIC"),
-        has_renderer=False,
+        has_renderer=True,
         has_offscreen_renderer=False,
         ignore_done=True,
         use_camera_obs=False,
@@ -45,7 +45,7 @@ def test_playback():
 
     # random actions to play
     n_actions = 100
-    actions = 0.1 * np.random.uniform(low=-1.0, high=1.0, size=(n_actions, env.action_spec[0].shape[0]))
+    actions = 0 * np.random.uniform(low=-1.0, high=1.0, size=(n_actions, env.action_spec[0].shape[0]))
 
     # play actions
     print("playing random actions...")

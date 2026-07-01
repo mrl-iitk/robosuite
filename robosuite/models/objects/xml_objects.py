@@ -4,6 +4,33 @@ from robosuite.models.objects import MujocoXMLObject
 from robosuite.utils.mjcf_utils import array_to_string, find_elements, xml_path_completion
 
 
+class CroissantObject(MujocoXMLObject):
+    """
+    Croissant object (used in ServeBread)
+    """
+
+    def __init__(self, name):
+        super().__init__(
+            xml_path_completion("objects/croissant.xml"),
+            name=name,
+            joints=[dict(type="free", damping="0.0005")],
+            obj_type="all",
+            duplicate_collision_geoms=True,
+        )
+
+
+class PlateObject(MujocoXMLObject):
+
+    def __init__(self, name):
+        super().__init__(
+            xml_path_completion("objects/plate.xml"),
+            name=name,
+            joints=[dict(type="free", damping="0.0005")],
+            obj_type="all",
+            duplicate_collision_geoms=True,
+        )
+
+        
 class BottleObject(MujocoXMLObject):
     """
     Bottle object

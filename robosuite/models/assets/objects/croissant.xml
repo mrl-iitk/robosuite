@@ -1,0 +1,62 @@
+<?xml version="1.0"?>
+<mujoco model="croissant">
+
+    <asset>
+
+        <!-- Croissant mesh -->
+        <mesh
+            name="croissant_mesh"
+            file="meshes/croissant.stl"
+            scale="1 1 1"/>
+
+        <!-- Material -->
+        <material
+            name="croissant_mat"
+            rgba="0.90 0.62 0.22 1"
+            specular="0.1"
+            shininess="0.2"/>
+
+    </asset>
+
+    <worldbody>
+        <body>
+            <body name="object">
+
+            <!-- <geom
+                name="croissant"
+                type="mesh"
+                mesh="croissant_mesh"
+                material="croissant_mat"
+                density="250"
+                friction="1.0 0.005 0.0001"
+                condim="4"
+                group="0"
+                solref="0.002 1"
+                solimp="0.998 0.998 0.001"/> -->
+                <geom pos="0 0 0" mesh="croissant_mesh" type="mesh" solimp="0.998 0.998 0.001" solref="0.005 1" density="50" friction="0.95 0.3 0.1"  material="croissant_mat"  group="0" condim="4"/>
+            </body>
+            <!-- Required sites -->
+
+            <site
+                name="bottom_site"
+                pos="0 0 -0.03"
+                size="0.005"
+                rgba="0 0 0 0"/>
+
+            <site
+                name="top_site"
+                pos="0 0 0.03"
+                size="0.005"
+                rgba="0 0 0 0"/>
+
+            <site
+                name="horizontal_radius_site"
+                pos="0.05 0 0"
+                size="0.005"
+                rgba="0 0 0 0"/>
+
+        </body>
+         
+    </worldbody>
+
+</mujoco>
