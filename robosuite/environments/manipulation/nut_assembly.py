@@ -418,9 +418,9 @@ class NutAssembly(ManipulationEnv):
                 self.placement_initializer.append_sampler(
                     sampler=UniformRandomSampler(
                         name=f"{nut_name}Sampler",
-                        x_range=[-0.115, -0.11],
-                        y_range=default_y_range,
-                        rotation=None,
+                        x_range=[0.05, 0.1] if nut_name == "SquareNut" else [-0.115, -0.11],
+                        y_range=[-0.1, 0.1] if nut_name == "SquareNut" else default_y_range,
+                        rotation=[3.14159 - 0.4, 3.14159 + 0.4], # pi is roughly 3.14159, pointing extension towards bot
                         rotation_axis="z",
                         ensure_object_boundary_in_range=False,
                         ensure_valid_placement=True,
