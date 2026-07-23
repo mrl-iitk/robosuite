@@ -1,0 +1,128 @@
+<mujoco model="Nero7">
+
+  <compiler angle="radian"/>
+
+
+    <asset>
+        <mesh name="base_link" file="meshes/base_link.stl"/>
+        <mesh name="link1"     file="meshes/link1.stl"/>
+        <mesh name="link2"     file="meshes/link2.stl"/>
+        <mesh name="link3"     file="meshes/link3.stl"/>
+        <mesh name="link4"     file="meshes/link4.stl"/>
+        <mesh name="link5"     file="meshes/link5.stl"/>
+        <mesh name="link6"     file="meshes/link6.stl"/>
+        <mesh name="link7"     file="meshes/link7.stl"/>
+
+        <material name="robot_grey" rgba="0.6 0.6 0.6 1"/>
+        <material name="white"      rgba="1 1 1 1"/>
+        <material name="black"      rgba="0.25 0.25 0.25 1"/>
+        <material name="off_white"  rgba="0.9 0.92 0.93 1"/> 
+    </asset>
+
+  <worldbody>
+
+    <body name="base_link" pos="0 0 0" euler="0 0 -3.14">
+    <site name="right_center" pos="0 0 0" size="0.01" rgba="1 0.3 0.3 1" group="2"/>
+      <inertial pos="-0.00319465997 -0.00005467608 0.04321758463"
+                mass="1.06458435"
+                fullinertia="0.00102659855152 0.00114399299508 0.00090872933022
+                             0.00000186219753 -0.00000295298037 -0.00000078763492"/>
+      <geom type="mesh" mesh="base_link" material="robot_grey" contype="0" conaffinity="0" group="1"/>
+
+      <!-- joint1: revolute about Z, offset +0.138 along Z from base_link -->
+      <body name="link1" pos="0 0 0.138" euler="0 0 0">
+        <inertial pos="-0.00076810578 -0.00005718031 -0.00686372765"
+                  mass="0.76710504"
+                  fullinertia="0.00066689512233 0.00054501235592 0.00051509465737
+                               0.00000273938306  0.00001463284987  0.00000183168344"/>
+        <joint name="joint1" type="hinge" axis="0 0 1" limited="true" range="-2.70526 2.70526"/>
+        <geom type="mesh" mesh="link1" material="robot_grey" contype="0" conaffinity="0" group="1"/>
+
+        <!-- joint2: rpy="1.5707963 3.1415926 0" → offset=0, axis Z in rotated frame -->
+        <body name="link2" pos="0 0 0" euler="-1.5707963 3.1415926 0">
+          <inertial pos="0.00079686657 -0.07890325930 0.00111849422"
+                    mass="0.69381908"
+                    fullinertia="0.00201093857656 0.00063544232555 0.00181943989593
+                                 -0.00002399426785 -0.00000072824714  0.00005831284343"/>
+          <joint name="joint2" type="hinge" axis="0 0 1" limited="true" range="-1.78 1.78"/>
+                 <!-- limited="true" range="-1.74 1.74" -->
+                 
+          <geom type="mesh" mesh="link2" material="robot_grey" contype="0" conaffinity="0" group="1"/>
+
+          <!-- joint3: pos="0 -0.31 0", rpy="-1.5707963 0 3.1415926926" -->
+          <body name="link3" pos="0 -0.31 0" euler="1.5707963 0 3.1415926926">
+            <inertial pos="0.00014513363 -0.00121378766 -0.04861136795"
+                      mass="0.67246544"
+                      fullinertia="0.00343229961910 0.00338662526897 0.00028853579710
+                                   -0.00000026976739  0.00000305078107 -0.00003550220027"/>
+            <joint name="joint3" type="hinge" axis="0 0 1" limited="true" range="-2.75 2.75"/>
+            <geom type="mesh" mesh="link3" material="robot_grey" contype="0" conaffinity="0" group="1"/>
+
+            <!-- joint4: pos="0 0 0", rpy="-1.5707963 0 3.1415926926" -->
+            <body name="link4" pos="0 0 0" euler="1.5707963 0 3.1415926926">
+              <inertial pos="-0.00031334623 -0.05675192422 0.00076056133"
+                        mass="0.48451414"
+                        fullinertia="0.00050386693505 0.00023502068202 0.00040149523118
+                                     -0.00000529675237  0.00000006134740  0.00001815932566"/>
+              <joint name="joint4" type="hinge" axis="0 0 1" limited="true" range="-1.05 2.22"/>
+                     <!-- limited="true" range="-1.01 2.14"/> -->
+              <geom type="mesh" mesh="link4" material="robot_grey" contype="0" conaffinity="0" group="1"/>
+
+              <!-- joint5: pos="0 -0.27001 0", rpy="1.5707963 -1.5707963 0" -->
+              <body name="link5" pos="0 -0.27001 0" euler="1.5707963 0 1.5707963">
+                <inertial pos="0.00265591357 0.00201195753 -0.11620855434"
+                          mass="0.58368405"
+                          fullinertia="0.00089537686723 0.00085866122972 0.00021774946532
+                                        0.00000648218232 -0.00001463346849 -0.00004035185637"/>
+                <joint name="joint5" type="hinge" axis="0 0 1" limited="true" range="-2.75 2.75"/>
+                <geom type="mesh" mesh="link5" material="robot_grey" contype="0" conaffinity="0" group="1"/>
+
+                <!-- joint6: pos="0 0 0", rpy="1.5707963 -1.5707963 0" -->
+                <body name="link6" pos="0 0 0" euler="1.5707963 0 1.5707963">
+                  <inertial pos="0.00009501505 0.00107831174 -0.00019110990"
+                            mass="0.3140406"
+                            fullinertia="0.00006027211661 0.00004699514792 0.00005756771792
+                                         -0.00000024650903  0.00000015701294  0.00000004170875"/>
+                  <joint name="joint6" type="hinge" axis="0 0 1" limited="true" range="-0.77 0.95"/>
+                  <geom type="mesh" mesh="link6" material="robot_grey" contype="0" conaffinity="0" group="1"/>
+
+                  <!-- joint7: pos="0 -0.0235 0", rpy="1.5707963 0 0" -->
+                  <body name="link7" pos="0 -0.0235 0" euler="1.5707963 0 0">
+                    <inertial pos="-0.00014000 -0.00010000 -0.00275000"
+                              mass="0.000001"
+                              fullinertia="1.1e-07 1.1e-07 2.0e-07
+                                           0 0 0"/>
+                    <joint name="joint7" type="hinge" axis="0 0 1" limited="true" range="-1.5707963 1.5707963"/>
+                    <geom type="mesh" mesh = "link7" material="robot_grey" contype="0" conaffinity="0" group="1"/>
+                      <body name="right_hand" pos="0.037 0 -0.0235" quat="0.5 -0.5 0.5 -0.5">
+                        <inertial pos="0 0 0" mass="0.5" diaginertia="0.05 0.05 0.05"/>
+                        <!-- This camera points out from the eef. -->
+                        <camera mode="fixed" name="eye_in_hand" pos="0.05 0 0" quat="0 0.707108 0.707108 0" fovy="75"/>
+                        <!-- to add gripper -->
+                      </body>
+                  </body>
+
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+
+
+  </worldbody>
+
+
+  <actuator>
+    <!-- Physical limits of the actuator. -->
+    <motor ctrllimited="true" ctrlrange="-24 24" joint="joint1" name="torq_j1"/>
+    <motor ctrllimited="true" ctrlrange="-24  24" joint="joint2" name="torq_j2"/>
+    <motor ctrllimited="true" ctrlrange="-18 18" joint="joint3" name="torq_j3"/>
+    <motor ctrllimited="true" ctrlrange="-18 18" joint="joint4" name="torq_j4"/>
+    <motor ctrllimited="true" ctrlrange="-8 8" joint="joint5" name="torq_j5"/>
+    <motor ctrllimited="true" ctrlrange="-8 8" joint="joint6" name="torq_j6"/>
+    <motor ctrllimited="true" ctrlrange="-8 8" joint="joint7" name="torq_j7"/>
+  </actuator>
+
+</mujoco>
