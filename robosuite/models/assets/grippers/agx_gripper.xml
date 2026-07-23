@@ -1,0 +1,56 @@
+<mujoco model="agx_gripper">
+  <compiler angle="radian"/>
+  <size njmax="500" nconmax="100" />
+  <asset>
+    <mesh name="gripper_base" file="meshes/agx_gripper/gripper_base.stl"/>
+    <mesh name="gripper_flange" file="meshes/agx_gripper/gripper_flange.stl"/>
+    <mesh name="gripper_link1" file="meshes/agx_gripper/gripper_link1.stl"/>
+    <mesh name="gripper_link2" file="meshes/agx_gripper/gripper_link2.stl"/>
+  </asset>
+  
+  <actuator>
+    <position name="gripper_joint1_actuator" joint="gripper_joint1" ctrllimited="true" ctrlrange="0 0.05" kp="1000" forcelimited="true" forcerange="-10 10"/>
+    <position name="gripper_joint2_actuator" joint="gripper_joint2" ctrllimited="true" ctrlrange="-0.05 0" kp="1000" forcelimited="true" forcerange="-10 10"/>
+  </actuator>
+
+  <worldbody>
+    <body name="agx_gripper" pos="0 0 0">
+      <site name="ft_frame" pos="0 0 0" size="0.01 0.01 0.01" rgba="1 0 0 1" type="sphere" group="1"/>
+      <!-- This site was added for visualization. -->
+      <!-- Flange to connect to arm -->
+      <geom type="mesh" mesh="gripper_flange" pos="0 0 -0.006" group="0"/>
+      <geom type="mesh" mesh="gripper_flange" pos="0 0 -0.006" group="1" rgba="0.2 0.2 0.2 1"/>
+      
+      <!-- Gripper base -->
+      <geom type="mesh" mesh="gripper_base" group="0"/>
+      <geom type="mesh" mesh="gripper_base" group="1" rgba="0.2 0.2 0.2 1"/>
+      
+      <body name="eef" pos="0 0 0.138" quat="1 0 0 0">
+        <site name="grip_site" pos="0 0 0" size="0.0025 0.0025 0.0025" rgba="1 0 0 0.5" type="sphere" group="1"/>
+        <site name="ee_x" pos="0.05 0 0" size="0.005 .1" quat="0.707105  0 0.707108 0 " rgba="1 0 0 0" type="cylinder" group="1"/>
+        <site name="ee_y" pos="0 0.05 0" size="0.005 .1" quat="0.707105 0.707108 0 0" rgba="0 1 0 0" type="cylinder" group="1"/>
+        <site name="ee_z" pos="0 0 0.05" size="0.005 .1" quat="1 0 0 0" rgba="0 0 1 0" type="cylinder" group="1"/>
+        <site name="grip_site_cylinder" pos="0 0 0" size="0.0025 0.1" rgba="0 1 0 0.3" type="cylinder" group="1"/>
+      </body>
+
+      <body name="gripper_link1" pos="0 0 0.138" quat="1.89469e-08 1.89469e-08 0.707107 0.707107">
+        <inertial pos="0.000651232 -0.049193 0.00972259" quat="0.477798 0.572974 -0.518028 0.418398" mass="0.025" diaginertia="7.74531e-05 7.36783e-05 5.0886e-06"/>
+        <joint name="gripper_joint1" pos="0 0 0" axis="0 0 1" type="slide" range="0 0.05" limited="true" damping="100" armature="1.0" frictionloss="1.0"/>
+        <geom type="mesh" mesh="gripper_link1" group="0"/>
+        <geom type="mesh" mesh="gripper_link1" group="1" rgba="0.8 0.8 0.8 1"/>
+      </body>
+      
+      <body name="gripper_link2" pos="0 0 0.138" quat="0.707107 0.707107 0 0">
+        <inertial pos="0.000651232 -0.049193 0.00972259" quat="0.477798 0.572974 -0.518028 0.418398" mass="0.025" diaginertia="7.74531e-05 7.36783e-05 5.0886e-06"/>
+        <joint name="gripper_joint2" pos="0 0 0" axis="0 0 -1" type="slide" range="-0.05 0" limited="true" damping="100" armature="1.0" frictionloss="1.0"/>
+        <geom type="mesh" mesh="gripper_link2" group="0"/>
+        <geom type="mesh" mesh="gripper_link2" group="1" rgba="0.8 0.8 0.8 1"/>
+      </body>
+    </body>
+  </worldbody>
+
+  <sensor>
+    <force name="force_ee" site="ft_frame"/>
+    <torque name="torque_ee" site="ft_frame"/>
+  </sensor>
+</mujoco>
