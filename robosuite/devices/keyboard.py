@@ -114,17 +114,17 @@ class Keyboard(Device):
         try:
             # controls for moving position
             if key == Key.up:
-                self.pos[0] -= self._pos_step * self.pos_sensitivity  # dec x
+                self.pos[0] += self._pos_step * self.pos_sensitivity  # inc x (forward)
             elif key == Key.down:
-                self.pos[0] += self._pos_step * self.pos_sensitivity  # inc x
+                self.pos[0] -= self._pos_step * self.pos_sensitivity  # dec x (backward)
             elif key == Key.left:
-                self.pos[1] -= self._pos_step * self.pos_sensitivity  # dec y
+                self.pos[1] += self._pos_step * self.pos_sensitivity  # inc y (left)
             elif key == Key.right:
-                self.pos[1] += self._pos_step * self.pos_sensitivity  # inc y
-            elif key.char == ".":
-                self.pos[2] -= self._pos_step * self.pos_sensitivity  # dec z
+                self.pos[1] -= self._pos_step * self.pos_sensitivity  # dec y (right)
             elif key.char == ";":
-                self.pos[2] += self._pos_step * self.pos_sensitivity  # inc z
+                self.pos[2] += self._pos_step * self.pos_sensitivity  # inc z (up)
+            elif key.char == ".":
+                self.pos[2] -= self._pos_step * self.pos_sensitivity  # dec z (down)
 
             # controls for moving orientation
             elif key.char == "e":
