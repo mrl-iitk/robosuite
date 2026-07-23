@@ -25,12 +25,19 @@ class MjviewerRenderer:
 
     def update(self):
         if self.viewer is None:
-            self.viewer = viewer.launch_passive(
-                self.env.sim.model._model,
-                self.env.sim.data._data,
-                show_left_ui=False,
-                show_right_ui=False,
-            )
+            try:
+                self.viewer = viewer.launch_passive(
+                    self.env.sim.model._model,
+                    self.env.sim.data._data,
+                    show_left_ui=False,
+                    show_right_ui=False,
+                )
+            except TypeError:
+                # Older versions of mujoco do not support show_left_ui and show_right_ui kwargs
+                self.viewer = viewer.launch_passive(
+                    self.env.sim.model._model,
+                    self.env.sim.data._data,
+                )
 
             self.viewer.opt.geomgroup[0] = 0
 

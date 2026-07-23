@@ -126,3 +126,9 @@ MUJOCO_LOG.TXT
 
 # private demonstration files
 robosuite/models/assets/demonstrations_private
+
+#Scratch Files
+scratch/*
+scratch_agx/*
+scratch_piper/*
+STRUCTURE.TXT

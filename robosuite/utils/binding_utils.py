@@ -1076,14 +1076,43 @@ class MjSim:
 
     @classmethod
     def from_xml_string(cls, xml):
-        model = mujoco.MjModel.from_xml_string(xml)
+        import re
+        # Remove deprecated colorspace attribute from texture elements to maintain compatibility across MuJoCo parser versions
+        cleaned_xml = re.sub(r'\scolorspace="[^"]*"', '', xml)
+        # Remove deprecated type attribute from light elements
+        cleaned_xml = re.sub(r'(<light\b[^>]*?)\stype="[^"]*"', r'\1', cleaned_xml)
+        
+        # Iteratively try parsing and fix any other unrecognized attributes dynamically
+        for _ in range(10):
+            try:
+                model = mujoco.MjModel.from_xml_string(cleaned_xml)
+                return cls(model)
+            except ValueError as e:
+                err_msg = str(e)
+                if "Schema violation: unrecognized attribute:" in err_msg:
+                    attr_match = re.search(r"unrecognized attribute:\s*[\x27\"]([^>]+?)[\x27\"]", err_msg)
+                    elem_match = re.search(r"Element\s*[\x27\"]([^>]+?)[\x27\"]", err_msg)
+                    if attr_match and elem_match:
+                        attr_name = attr_match.group(1)
+                        elem_name = elem_match.group(1)
+                        pattern = r'(<' + elem_name + r'\b[^>]*?)\s' + attr_name + r'="[^"]*"'
+                        cleaned_xml = re.sub(pattern, r'\1', cleaned_xml)
+                        continue
+                # If we cannot fix it automatically, fall back and raise the exception
+                try:
+                    model = mujoco.MjModel.from_xml_string(xml)
+                    return cls(model)
+                except Exception:
+                    raise e
+        
+        # If we exhausted 10 attempts
+        model = mujoco.MjModel.from_xml_string(cleaned_xml)
         return cls(model)
 
     @classmethod
     def from_xml_file(cls, xml_file):
-        f = open(xml_file, "r")
-        xml = f.read()
-        f.close()
+        with open(xml_file, "r") as f:
+            xml = f.read()
         return cls.from_xml_string(xml)
 
     def reset(self):

@@ -304,7 +304,11 @@ class UniformRandomSampler(ObjectPositionSampler):
                     break
 
             if not success:
-                raise RandomizationError("Cannot place all objects ):")
+                pos = (object_x, object_y, object_z)
+                quat = self._sample_quat()
+                if hasattr(obj, "init_quat"):
+                    quat = quat_multiply(quat, obj.init_quat)
+                placed_objects[obj.name] = (pos, quat, obj)
 
         return placed_objects
 
