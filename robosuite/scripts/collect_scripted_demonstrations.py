@@ -88,7 +88,7 @@ def gather_demonstrations_as_hdf5(directory, out_dir, env_info):
     f.close()
 
 
-def collect_lift(env, max_steps, max_fr=20):
+def collect_lift(env, max_steps, max_fr=20, absolute_actions=False):
     """
     Executes a simple scripted state machine to solve the Lift task.
     """
@@ -160,6 +160,13 @@ def collect_lift(env, max_steps, max_fr=20):
         # Action array: [dx, dy, dz, ax, ay, az, gripper]
         action = np.concatenate([delta_pos, delta_ori, [gripper]])
         
+        if absolute_actions:
+            from scipy.spatial.transform import Rotation as R
+            abs_pos = eef_pos + np.clip(delta_pos, -1.0, 1.0) * 0.05
+            eef_quat_xyzw = obs.get(f"robot0_eef_quat", np.array([0, 0, 0, 1.0]))
+            abs_ori = (R.from_rotvec(np.clip(delta_ori, -1.0, 1.0) * 0.5) * R.from_quat(eef_quat_xyzw)).as_rotvec()
+            action = np.concatenate([abs_pos, abs_ori, [gripper]])
+        
         start_time = time.time()
         obs, reward, done, info = env.step(action)
         step_count += 1
@@ -173,7 +180,7 @@ def collect_lift(env, max_steps, max_fr=20):
     env.close()
     return False
 
-def collect_nut_assembly(env, max_steps, device=None, max_fr=20):
+def collect_nut_assembly(env, max_steps, device=None, max_fr=20, absolute_actions=False):
     """
     Executes a simple scripted state machine to solve the NutAssembly task.
     """
@@ -391,6 +398,12 @@ def collect_nut_assembly(env, max_steps, device=None, max_fr=20):
         # Action array: [dx, dy, dz, ax, ay, az, gripper]
         action = np.concatenate([delta_pos, delta_ori, [gripper]])
         
+        if absolute_actions:
+            from scipy.spatial.transform import Rotation as R
+            abs_pos = eef_pos + np.clip(delta_pos, -1.0, 1.0) * 0.05
+            abs_ori = (R.from_rotvec(np.clip(delta_ori, -1.0, 1.0) * 0.5) * R.from_quat(eef_quat)).as_rotvec()
+            action = np.concatenate([abs_pos, abs_ori, [gripper]])
+        
         start_time = time.time()
         obs, reward, done, info = env.step(action)
         step_count += 1
@@ -413,6 +426,7 @@ if __name__ == "__main__":
     parser.add_argument("--max_steps", type=int, default=600)
     parser.add_argument("--device", type=str, default="none", help="Choice of device: none, keyboard, spacemouse")
     parser.add_argument("--max_fr", type=int, default=10, help="Max frame rate (fps) to sleep to; 20 is real-time, 10 is half-speed.")
+    parser.add_argument("--absolute_actions", action="store_true", help="Record absolute actions instead of delta actions.")
     args = parser.parse_args()
 
     controller_config = load_composite_controller_config(
@@ -424,7 +438,7 @@ if __name__ == "__main__":
     for arm in ["right", "left"]:
         if arm in controller_config["body_parts"]:
             controller_config["body_parts"][arm]["type"] = "OSC_POSE"
-            controller_config["body_parts"][arm]["input_type"] = "delta"
+            controller_config["body_parts"][arm]["input_type"] = "absolute" if args.absolute_actions else "delta"
             controller_config["body_parts"][arm]["input_ref_frame"] = "world"
             controller_config["body_parts"][arm]["use_action_scaling"] = True
 
@@ -549,9 +563,9 @@ if __name__ == "__main__":
         total_attempts += 1
         print(f"Collecting episode {successful_episodes+1}/{args.num_episodes} (Attempt {total_attempts})...")
         if args.environment == "Lift":
-            success = collect_lift(env, args.max_steps, args.max_fr)
+            success = collect_lift(env, args.max_steps, args.max_fr, args.absolute_actions)
         elif args.environment in ["NutAssembly", "NutAssemblySquare", "NutAssemblyRound"]:
-            success = collect_nut_assembly(env, args.max_steps, device, args.max_fr)
+            success = collect_nut_assembly(env, args.max_steps, device, args.max_fr, args.absolute_actions)
         else:
             print(f"No scripted policy available for {args.environment}")
             break
@@ -562,6 +576,7 @@ if __name__ == "__main__":
             
         # We check the return value because DataCollectionWrapper wipes env.successful on flush!
         if success or getattr(env, "successful", False):
+            env.successful = True  # Force wrapper's flag to True so _flush saves it as successful
             successful_episodes += 1
             print(f"Episode successful! Total collected: {successful_episodes}")
         else:
