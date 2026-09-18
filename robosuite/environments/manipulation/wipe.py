@@ -19,7 +19,7 @@ DEFAULT_WIPE_CONFIG = {
     "distance_multiplier": 5.0,  # multiplier for the dense reward inversely proportional to the mean location of the pegs to wipe
     "distance_th_multiplier": 5.0,  # multiplier in the tanh function for the aforementioned reward
     # settings for table top
-    "table_full_size": [0.5, 0.8, 0.05],  # Size of tabletop
+    "table_full_size": [0.45, 0.8, 0.05],  # Size of tabletop
     "table_offset": [0.15, 0, 0.9],  # Offset of table (z dimension defines max height of table)
     "table_friction": [0.03, 0.005, 0.0001],  # Friction parameters for the table
     "table_friction_std": 0,  # Standard deviation to sample different friction parameters for the table each episode
@@ -27,7 +27,7 @@ DEFAULT_WIPE_CONFIG = {
     "table_height_std": 0.0,  # Standard deviation to sample different heigths of the table each episode
     "line_width": 0.04,  # Width of the line to wipe (diameter of the pegs)
     "two_clusters": False,  # if the dirt to wipe is one continuous line or two
-    "coverage_factor": 0.6,  # how much of the table surface we cover
+    "coverage_factor": 0.5,  # how much of the table surface we cover
     "num_markers": 100,  # How many particles of dirt to generate in the environment
     # settings for thresholds
     "contact_threshold": 1.0,  # Minimum eef force to qualify as contact [N]

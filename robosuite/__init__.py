@@ -13,6 +13,8 @@ from robosuite.environments.manipulation.two_arm_peg_in_hole import TwoArmPegInH
 from robosuite.environments.manipulation.two_arm_handover import TwoArmHandover
 from robosuite.environments.manipulation.two_arm_transport import TwoArmTransport
 from robosuite.environments.manipulation.serve_bread import ServeBread
+from robosuite.environments.manipulation.cube_row import CubeRow
+from robosuite.environments.manipulation.pyramid_stack import PyramidStack
 
 from robosuite.environments import ALL_ENVIRONMENTS
 from robosuite.controllers import (

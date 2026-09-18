@@ -8,41 +8,20 @@ from robosuite.models.objects import BoxObject
 from robosuite.models.tasks import ManipulationTask
 from robosuite.utils.mjcf_utils import CustomMaterial
 from robosuite.utils.observables import Observable, sensor
-from robosuite.utils.placement_samplers import UniformRandomSampler
+from robosuite.utils.placement_samplers import SequentialCompositeSampler, UniformRandomSampler
 from robosuite.utils.transform_utils import convert_quat
 
-# Per-robot pick (spawn) / goal workspace tuning. Each arm's real reachable region on the table
-# differs by mount position and kinematics (e.g. Nero7 mounts at the table's near edge and reaches
-# forward, rather than being centered over the table like Panda), so a single global range does
-# not fit every robot equally well. Each entry gives the region cubeA/cubeB are randomly placed in
-# ("pick_x_range"/"pick_y_range") and a fixed point, well clear of that region, where the scripted
-# policy builds the stack ("goal_offset") -- both as (x, y) offsets from table_offset. Add an entry
-# here (keyed by robot.name, e.g. "Panda", "Sawyer") to tune a new robot's workspace; robots without
-# an entry fall back to "default".
-ROBOT_STACK_WORKSPACES = {
-    "Nero7": {
-        # A gridded reachability scan (fresh start, worst-case +-45deg gripper yaw -- the full
-        # range the scripted/nearest-face grasp policy ever asks for) found a clean, low-error
-        # region of x in [-0.05, 0.15], y in [-0.15, 0.15] about the table center, with a failure
-        # pocket just outside it (x < -0.10, |y| < 0.10) where the wrist joints saturate against
-        # their limits while yawing near the base.
-        "pick_x_range": [-0.05, 0.15],
-        "pick_y_range": [-0.15, -0.03],
-        "goal_offset": [0.05, 0.12],
-    },
-    "default": {
-        # Centered range that predates the Nero7-specific tuning above; matches robots (Panda,
-        # Sawyer, ...) mounted with the table roughly centered in front of them.
-        "pick_x_range": [-0.08, 0.08],
-        "pick_y_range": [-0.08, -0.01],
-        "goal_offset": [0.0, 0.06],
-    },
-}
+NUM_CUBES = 4  # this task is fixed to exactly 4 cubes
 
 
-class Stack(ManipulationEnv):
+class CubeRow(ManipulationEnv):
     """
-    This class corresponds to the stacking task for a single robot arm.
+    This class corresponds to a cube-arranging task for a single robot arm: pick up exactly
+    4 plain (uncolored / unmarked) cubes and place them in a straight row with a fixed gap
+    between adjacent cubes. Structured the same way as robosuite's built-in `Lift` task --
+    same lifecycle hooks (`_load_model`, `_setup_references`, `_setup_observables`, `reward`,
+    `_check_success`, `visualize`) -- just generalized from one cube to four, with an explicit
+    goal (a row layout) instead of "lift off the table".
 
     Args:
         robots (str or list of str): Specification for specific robot arm(s) to be instantiated within this env
@@ -80,22 +59,36 @@ class Stack(ManipulationEnv):
 
         table_full_size (3-tuple): x, y, and z dimensions of the table.
 
-        table_friction (3-tuple): the three mujoco friction parameters for
-            the table.
+        table_friction (3-tuple): the three mujoco friction parameters for the table.
+
+        cube_size (float): full side length of each cube, in meters (default 0.045 = 4.5cm).
+
+        gap (float): spacing between adjacent cubes in the goal row, in meters (default 0.005 = 0.5cm).
+
+        spawn_location (2-tuple): explicit (x, y) anchor, in table-local meters relative to the
+            table center, for the cube_0 (row=0, col=0) spawn cell. The remaining 3 cubes are laid
+            out on a 2x2 grid extending from this anchor by `spawn_spacing` in the +x and +y
+            directions, so all 4 start with generous, known separation instead of scattered randomly
+            across the whole table. E.g. (-0.25, -0.25) anchors the grid in the corner nearest the
+            robot's -x/-y side.
+
+        spawn_spacing (float): center-to-center spacing (m) between the 4 spawn grid cells.
+
+        placement_tolerance (float): per-cube xy distance (m) to its goal slot in the row required
+            to count as "placed".
 
         use_camera_obs (bool): if True, every observation includes rendered image(s)
 
-        use_object_obs (bool): if True, include object (cube) information in
-            the observation.
+        use_object_obs (bool): if True, include object (cube) information in the observation.
 
         reward_scale (None or float): Scales the normalized reward function by the amount specified.
             If None, environment reward remains unnormalized
 
         reward_shaping (bool): if True, use dense rewards.
 
-        placement_initializer (ObjectPositionSampler): if provided, will
-            be used to place objects on every reset, else a UniformRandomSampler
-            is used by default.
+        placement_initializer (ObjectPositionSampler): if provided, will be used to place the 4
+            cubes on every reset (must already contain all 4 `self.cubes` via `add_objects`), else
+            a per-cube `UniformRandomSampler` grid anchored at `spawn_location` is used by default.
 
         has_renderer (bool): If true, render the simulation state in
             a viewer instead of headless mode.
@@ -173,6 +166,11 @@ class Stack(ManipulationEnv):
         initialization_noise="default",
         table_full_size=(0.8, 0.8, 0.05),
         table_friction=(1.0, 5e-3, 1e-4),
+        cube_size=0.045,
+        gap=0.005,
+        spawn_location=(-0.25, -0.25),
+        spawn_spacing=0.12,
+        placement_tolerance=0.01,
         use_camera_obs=True,
         use_object_obs=True,
         reward_scale=1.0,
@@ -202,6 +200,16 @@ class Stack(ManipulationEnv):
         self.table_friction = table_friction
         self.table_offset = np.array((0, 0, 0.8))
 
+        # cube / layout settings
+        self.num_cubes = NUM_CUBES
+        self.cube_size = cube_size
+        self.gap = gap
+        self.spawn_location = np.array(spawn_location, dtype=float)
+        self.spawn_spacing = spawn_spacing
+        self.placement_tolerance = placement_tolerance
+        # fixed (x, y) goal slots for the row, spaced by cube_size + gap, table-local coords
+        self.target_positions = self._compute_row_layout(self.num_cubes, cube_size, gap)
+
         # reward configuration
         self.reward_scale = reward_scale
         self.reward_shaping = reward_shaping
@@ -209,8 +217,16 @@ class Stack(ManipulationEnv):
         # whether to use ground-truth object states
         self.use_object_obs = use_object_obs
 
-        # object placement initializer
+        # object placement initializer -- kept separately from self.placement_initializer because
+        # _load_model() runs on every hard reset and rebuilds a *new* SequentialCompositeSampler each
+        # time (composite samplers don't support add_objects(), unlike a flat UniformRandomSampler),
+        # so the "did the user pass one in" check must not be against self.placement_initializer itself
+        self._external_placement_initializer = placement_initializer
         self.placement_initializer = placement_initializer
+
+        # populated in _load_model / _setup_references
+        self.cubes = []
+        self.cube_body_ids = []
 
         super().__init__(
             robots=robots,
@@ -240,32 +256,31 @@ class Stack(ManipulationEnv):
             renderer_config=renderer_config,
         )
 
+    def _compute_row_layout(self, n, cube_size, gap):
+        """Fixed table-local (x, y) goal slots for an n-cube row, spaced by cube_size + gap."""
+        pitch = cube_size + gap
+        start = -(n - 1) * pitch / 2.0
+        return [np.array([0.15, start + i * pitch]) for i in range(n)]
+
     def reward(self, action=None):
         """
         Reward function for the task.
 
         Sparse un-normalized reward:
 
-            - a discrete reward of 2.0 is provided if the red block is stacked on the green block
+            - a discrete reward of 2.25 is provided if all 4 cubes are arranged in the row
 
-        Un-normalized components if using reward shaping:
+        Un-normalized summed components if using reward shaping, averaged per-cube:
 
-            - Reaching: in [0, 0.25], to encourage the arm to reach the cube
-            - Grasping: in {0, 0.25}, non-zero if arm is grasping the cube
-            - Lifting: in {0, 1}, non-zero if arm has lifted the cube
-            - Aligning: in [0, 0.5], encourages aligning one cube over the other
-            - Stacking: in {0, 2}, non-zero if cube is stacked on other cube
+            - Reaching: in [0, 1], to encourage the arm to reach an unplaced cube
+            - Grasping: in {0, 0.25}, non-zero if arm is grasping that cube
+            - Placing: in [0, 1], non-zero (and only counted) once the cube is grasped, encourages
+              carrying it to its row slot
 
-        The reward is max over the following:
-
-            - Reaching + Grasping
-            - Lifting + Aligning
-            - Stacking
-
-        The sparse reward only consists of the stacking component.
+        The sparse reward only consists of the row-complete component.
 
         Note that the final reward is normalized and scaled by
-        reward_scale / 2.0 as well so that the max score is equal to reward_scale
+        reward_scale / 2.25 as well so that the max score is equal to reward_scale
 
         Args:
             action (np array): [NOT USED]
@@ -273,62 +288,44 @@ class Stack(ManipulationEnv):
         Returns:
             float: reward value
         """
-        r_reach, r_lift, r_stack = self.staged_rewards()
-        if self.reward_shaping:
-            reward = max(r_reach, r_lift, r_stack)
-        else:
-            reward = 2.0 if r_stack > 0 else 0.0
+        reward = 0.0
 
+        # sparse completion reward
+        if self._check_success():
+            reward = 2.25
+
+        # use a shaping reward
+        elif self.reward_shaping:
+            gripper = self.robots[0].gripper
+            per_cube_reward = 0.0
+            for cube in self.cubes:
+                dist_to_target = self._cube_xy_dist_to_target(cube)
+                placed = dist_to_target < self.placement_tolerance and self._cube_resting(cube)
+                if placed:
+                    per_cube_reward += 1.0
+                    continue
+
+                # reaching reward
+                reach_dist = self._gripper_to_target(
+                    gripper=gripper, target=cube.root_body, target_type="body", return_distance=True
+                )
+                reaching_reward = 1 - np.tanh(10.0 * reach_dist)
+                per_cube_reward += reaching_reward
+
+                # grasping reward
+                grasping = self._check_grasp(gripper=gripper, object_geoms=cube)
+                if grasping:
+                    per_cube_reward += 0.25
+                    # placing reward, only once grasped (encourages carrying toward the slot)
+                    per_cube_reward += 1 - np.tanh(10.0 * dist_to_target)
+
+            reward = per_cube_reward / self.num_cubes
+
+        # Scale reward if requested
         if self.reward_scale is not None:
-            reward *= self.reward_scale / 2.0
+            reward *= self.reward_scale / 2.25
 
         return reward
-
-    def staged_rewards(self):
-        """
-        Helper function to calculate staged rewards based on current physical states.
-
-        Returns:
-            3-tuple:
-
-                - (float): reward for reaching and grasping
-                - (float): reward for lifting and aligning
-                - (float): reward for stacking
-        """
-        # reaching is successful when the gripper site is close to the center of the cube
-        cubeA_pos = self.sim.data.body_xpos[self.cubeA_body_id]
-        cubeB_pos = self.sim.data.body_xpos[self.cubeB_body_id]
-        dist = min(
-            [
-                np.linalg.norm(self.sim.data.site_xpos[self.robots[0].eef_site_id[arm]] - cubeA_pos)
-                for arm in self.robots[0].arms
-            ]
-        )
-        r_reach = (1 - np.tanh(10.0 * dist)) * 0.25
-
-        # grasping reward
-        grasping_cubeA = self._check_grasp(gripper=self.robots[0].gripper, object_geoms=self.cubeA)
-        if grasping_cubeA:
-            r_reach += 0.25
-
-        # lifting is successful when the cube is above the table top by a margin
-        cubeA_height = cubeA_pos[2]
-        table_height = self.table_offset[2]
-        cubeA_lifted = cubeA_height > table_height + 0.04
-        r_lift = 1.0 if cubeA_lifted else 0.0
-
-        # Aligning is successful when cubeA is right above cubeB
-        if cubeA_lifted:
-            horiz_dist = np.linalg.norm(np.array(cubeA_pos[:2]) - np.array(cubeB_pos[:2]))
-            r_lift += 0.5 * (1 - np.tanh(horiz_dist))
-
-        # stacking is successful when the block is lifted and the gripper is not holding the object
-        r_stack = 0
-        cubeA_touching_cubeB = self.check_contact(self.cubeA, self.cubeB)
-        if not grasping_cubeA and r_lift > 0 and cubeA_touching_cubeB:
-            r_stack = 2.0
-
-        return r_reach, r_lift, r_stack
 
     def _load_model(self):
         """
@@ -350,7 +347,7 @@ class Stack(ManipulationEnv):
         # Arena always gets set to zero origin
         mujoco_arena.set_origin([0, 0, 0])
 
-        # initialize objects of interest
+        # initialize the 4 cubes -- plain, uniform material, no color-coded goal markers
         tex_attrib = {
             "type": "cube",
         }
@@ -359,67 +356,64 @@ class Stack(ManipulationEnv):
             "specular": "0.4",
             "shininess": "0.1",
         }
-        redwood = CustomMaterial(
-            texture="WoodRed",
-            tex_name="redwood",
-            mat_name="redwood_mat",
+        plain_material = CustomMaterial(
+            texture="WoodLight",
+            tex_name="cube_tex",
+            mat_name="cube_mat",
             tex_attrib=tex_attrib,
             mat_attrib=mat_attrib,
         )
-        greenwood = CustomMaterial(
-            texture="WoodGreen",
-            tex_name="greenwood",
-            mat_name="greenwood_mat",
-            tex_attrib=tex_attrib,
-            mat_attrib=mat_attrib,
-        )
-        self.cubeA = BoxObject(
-            name="cubeA",
-            size_min=[0.02, 0.02, 0.02],
-            size_max=[0.02, 0.02, 0.02],
-            rgba=[1, 0, 0, 1],
-            material=redwood,
-        )
-        self.cubeB = BoxObject(
-            name="cubeB",
-            size_min=[0.025, 0.025, 0.025],
-            size_max=[0.025, 0.025, 0.025],
-            rgba=[0, 1, 0, 1],
-            material=greenwood,
-        )
-        cubes = [self.cubeA, self.cubeB]
-
-        # Look up this robot's pick/goal workspace (see ROBOT_STACK_WORKSPACES above). The pick
-        # region is where cubeA/cubeB spawn; the goal is a fixed point, well clear of that region,
-        # where the scripted policy builds the stack, so cubes never spawn on top of the stacking
-        # target. self.stack_target_pos exposes the goal's world (x, y) for scripted policies.
-        workspace = ROBOT_STACK_WORKSPACES.get(self.robots[0].name, ROBOT_STACK_WORKSPACES["default"])
-        pick_x_range = workspace["pick_x_range"]
-        pick_y_range = workspace["pick_y_range"]
-        self.stack_target_pos = self.table_offset[:2] + np.array(workspace["goal_offset"])
-
-        # Create placement initializer
-        if self.placement_initializer is not None:
-            self.placement_initializer.reset()
-            self.placement_initializer.add_objects(cubes)
-        else:
-            self.placement_initializer = UniformRandomSampler(
-                name="ObjectSampler",
-                mujoco_objects=cubes,
-                x_range=pick_x_range,
-                y_range=pick_y_range,
-                rotation=None,
-                ensure_object_boundary_in_range=False,
-                ensure_valid_placement=True,
-                reference_pos=self.table_offset,
-                z_offset=0.01,
+        cube_half = self.cube_size / 2.0
+        self.cubes = [
+            BoxObject(
+                name=f"cube_{i}",
+                size_min=[cube_half, cube_half, cube_half],
+                size_max=[cube_half, cube_half, cube_half],
+                material=plain_material,
+                density=300,
             )
+            for i in range(self.num_cubes)
+        ]
+
+        # Create placement initializer.
+        # NOTE: unlike Lift's single flat UniformRandomSampler, our default sampler here is a
+        # SequentialCompositeSampler (one sub-sampler per cube, for the spawn grid). Composite
+        # samplers don't support add_objects() -- they're rebuilt from scratch every _load_model()
+        # call instead, using freshly-created self.cubes each time. Only an *externally supplied*
+        # sampler (passed in at construction) gets the reset()+add_objects() treatment.
+        if self._external_placement_initializer is not None:
+            self._external_placement_initializer.reset()
+            self._external_placement_initializer.add_objects(self.cubes)
+            self.placement_initializer = self._external_placement_initializer
+        else:
+            # 2x2 grid of per-cube samplers anchored at spawn_location, so the 4 cubes start
+            # with generous, known separation instead of anywhere on the table.
+            self.placement_initializer = SequentialCompositeSampler(name="SpawnGridSampler")
+            ncols = 2
+            jitter = self.spawn_spacing * 0.15  # small jitter, cubes stay well separated
+            for i, cube in enumerate(self.cubes):
+                row, col = divmod(i, ncols)
+                cell_center = self.spawn_location + np.array([row * self.spawn_spacing, col * self.spawn_spacing])
+                self.placement_initializer.append_sampler(
+                    UniformRandomSampler(
+                        name=f"CubeSampler{i}",
+                        mujoco_objects=cube,
+                        x_range=[cell_center[0] - jitter, cell_center[0] + jitter],
+                        y_range=[cell_center[1] - jitter, cell_center[1] + jitter],
+                        rotation=(0, 0),  # keep axis-aligned so the final row packs cleanly
+                        rotation_axis="z",
+                        ensure_object_boundary_in_range=False,
+                        ensure_valid_placement=True,
+                        reference_pos=self.table_offset,
+                        z_offset=0.01,
+                    )
+                )
 
         # task includes arena, robot, and objects of interest
         self.model = ManipulationTask(
             mujoco_arena=mujoco_arena,
             mujoco_robots=[robot.robot_model for robot in self.robots],
-            mujoco_objects=cubes,
+            mujoco_objects=self.cubes,
         )
 
     def _setup_references(self):
@@ -431,8 +425,68 @@ class Stack(ManipulationEnv):
         super()._setup_references()
 
         # Additional object references from this env
-        self.cubeA_body_id = self.sim.model.body_name2id(self.cubeA.root_body)
-        self.cubeB_body_id = self.sim.model.body_name2id(self.cubeB.root_body)
+        self.cube_body_ids = [self.sim.model.body_name2id(cube.root_body) for cube in self.cubes]
+
+    def _setup_observables(self):
+        """
+        Sets up observables to be used for this environment. Creates object-based observables if enabled
+
+        Returns:
+            OrderedDict: Dictionary mapping observable names to its corresponding Observable object
+        """
+        observables = super()._setup_observables()
+
+        # low-level object information
+        if self.use_object_obs:
+            # define observables modality
+            modality = "object"
+
+            arm_prefixes = self._get_arm_prefixes(self.robots[0], include_robot_name=False)
+            full_prefixes = self._get_arm_prefixes(self.robots[0])
+
+            sensors = []
+            for i, cube in enumerate(self.cubes):
+                target_xy = self.table_offset[:2] + self.target_positions[i]
+
+                @sensor(modality=modality)
+                def cube_pos(obs_cache, body_id=self.cube_body_ids[i] if self.cube_body_ids else None, cube=cube):
+                    bid = body_id if body_id is not None else self.sim.model.body_name2id(cube.root_body)
+                    return np.array(self.sim.data.body_xpos[bid])
+
+                @sensor(modality=modality)
+                def cube_quat(obs_cache, body_id=self.cube_body_ids[i] if self.cube_body_ids else None, cube=cube):
+                    bid = body_id if body_id is not None else self.sim.model.body_name2id(cube.root_body)
+                    return convert_quat(np.array(self.sim.data.body_xquat[bid]), to="xyzw")
+
+                @sensor(modality=modality)
+                def cube_to_target(obs_cache, key=f"cube_{i}_pos", tgt=target_xy):
+                    if key in obs_cache:
+                        xy = obs_cache[key][:2] - tgt
+                        return np.array([xy[0], xy[1], 0.0])
+                    return np.zeros(3)
+
+                cube_pos.__name__ = f"cube_{i}_pos"
+                cube_quat.__name__ = f"cube_{i}_quat"
+                cube_to_target.__name__ = f"cube_{i}_to_target"
+                sensors += [cube_pos, cube_quat, cube_to_target]
+
+                # gripper to cube position sensor; one for each arm
+                sensors += [
+                    self._get_obj_eef_sensor(full_pf, f"cube_{i}_pos", f"{arm_pf}gripper_to_cube_{i}_pos", modality)
+                    for arm_pf, full_pf in zip(arm_prefixes, full_prefixes)
+                ]
+
+            names = [s.__name__ for s in sensors]
+
+            # Create observables
+            for name, s in zip(names, sensors):
+                observables[name] = Observable(
+                    name=name,
+                    sensor=s,
+                    sampling_rate=self.control_freq,
+                )
+
+        return observables
 
     def _reset_internal(self):
         """
@@ -450,79 +504,10 @@ class Stack(ManipulationEnv):
             for obj_pos, obj_quat, obj in object_placements.values():
                 self.sim.data.set_joint_qpos(obj.joints[0], np.concatenate([np.array(obj_pos), np.array(obj_quat)]))
 
-    def _setup_observables(self):
-        """
-        Sets up observables to be used for this environment. Creates object-based observables if enabled
-
-        Returns:
-            OrderedDict: Dictionary mapping observable names to its corresponding Observable object
-        """
-        observables = super()._setup_observables()
-
-        # low-level object information
-        if self.use_object_obs:
-            # define observables modality
-            modality = "object"
-
-            # position and rotation of the first cube
-            @sensor(modality=modality)
-            def cubeA_pos(obs_cache):
-                return np.array(self.sim.data.body_xpos[self.cubeA_body_id])
-
-            @sensor(modality=modality)
-            def cubeA_quat(obs_cache):
-                return convert_quat(np.array(self.sim.data.body_xquat[self.cubeA_body_id]), to="xyzw")
-
-            @sensor(modality=modality)
-            def cubeB_pos(obs_cache):
-                return np.array(self.sim.data.body_xpos[self.cubeB_body_id])
-
-            @sensor(modality=modality)
-            def cubeB_quat(obs_cache):
-                return convert_quat(np.array(self.sim.data.body_xquat[self.cubeB_body_id]), to="xyzw")
-
-            @sensor(modality=modality)
-            def cubeA_to_cubeB(obs_cache):
-                return (
-                    obs_cache["cubeB_pos"] - obs_cache["cubeA_pos"]
-                    if "cubeA_pos" in obs_cache and "cubeB_pos" in obs_cache
-                    else np.zeros(3)
-                )
-
-            arm_prefixes = self._get_arm_prefixes(self.robots[0], include_robot_name=False)
-            full_prefixes = self._get_arm_prefixes(self.robots[0])
-
-            sensors = [cubeA_pos, cubeA_quat, cubeB_pos, cubeB_quat, cubeA_to_cubeB]
-            sensors += [
-                self._get_obj_eef_sensor(full_pf, f"{cube}_pos", f"{arm_pf}gripper_to_{cube}", modality)
-                for arm_pf, full_pf in zip(arm_prefixes, full_prefixes)
-                for cube in ["cubeA", "cubeB"]
-            ]
-            names = [s.__name__ for s in sensors]
-
-            # Create observables
-            for name, s in zip(names, sensors):
-                observables[name] = Observable(
-                    name=name,
-                    sensor=s,
-                    sampling_rate=self.control_freq,
-                )
-
-        return observables
-
-    def _check_success(self):
-        """
-        Check if blocks are stacked correctly.
-
-        Returns:
-            bool: True if blocks are correctly stacked
-        """
-        _, _, r_stack = self.staged_rewards()
-        return r_stack > 0
-
     def visualize(self, vis_settings):
         """
-        In addition to super call, visualize gripper site proportional to the distance to the cube.
+        In addition to super call, visualize gripper site proportional to the distance to the
+        nearest not-yet-placed cube.
 
         Args:
             vis_settings (dict): Visualization keywords mapped to T/F, determining whether that specific
@@ -532,6 +517,59 @@ class Stack(ManipulationEnv):
         # Run superclass method first
         super().visualize(vis_settings=vis_settings)
 
-        # Color the gripper visualization site according to its distance to the cube
+        # Color the gripper visualization site according to its distance to the closest unplaced cube
         if vis_settings["grippers"]:
-            self._visualize_gripper_to_target(gripper=self.robots[0].gripper, target=self.cubeA)
+            unplaced = [
+                cube
+                for cube in self.cubes
+                if not (self._cube_xy_dist_to_target(cube) < self.placement_tolerance and self._cube_resting(cube))
+            ]
+            target_cube = unplaced[0] if unplaced else self.cubes[-1]
+            self._visualize_gripper_to_target(gripper=self.robots[0].gripper, target=target_cube)
+
+    def _cube_body_id(self, cube):
+        return self.sim.model.body_name2id(cube.root_body)
+
+    def _cube_xy_dist_to_target(self, cube):
+        i = self.cubes.index(cube)
+        cube_pos = self.sim.data.body_xpos[self._cube_body_id(cube)]
+        target_xy = self.table_offset[:2] + self.target_positions[i]
+        return np.linalg.norm(cube_pos[:2] - target_xy)
+
+    def _cube_resting(self, cube):
+        cube_z = self.sim.data.body_xpos[self._cube_body_id(cube)][2]
+        table_z = self.model.mujoco_arena.table_offset[2]
+        return abs(cube_z - table_z) < 0.03
+
+    def _check_success(self):
+        """
+        Check if all 4 cubes have been arranged into their row slots.
+
+        Returns:
+            bool: True if every cube is within `placement_tolerance` of its goal slot and resting
+        """
+        return all(
+            self._cube_xy_dist_to_target(cube) < self.placement_tolerance and self._cube_resting(cube)
+            for cube in self.cubes
+        )
+
+
+if __name__ == "__main__":
+    import robosuite
+
+    env = robosuite.make(
+        "CubeRow",
+        robots="Panda",
+        spawn_location=(-0.25, -0.25),
+        has_renderer=True,
+        has_offscreen_renderer=False,
+        use_camera_obs=False,
+        control_freq=20,
+    )
+    env.reset()
+    low, high = env.action_spec
+    for _ in range(500):
+        action = np.random.uniform(low, high)
+        obs, reward, done, info = env.step(action)
+        env.render()
+    env.close()

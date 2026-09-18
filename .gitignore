@@ -132,3 +132,7 @@ robosuite/models/assets/demonstrations_private
 *.zip
 *.pkl
 logs/
+
+wipe_datasets/
+stack_datasets/
+pyramid_datasets/

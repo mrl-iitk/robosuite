@@ -48,6 +48,7 @@
     <!-- side view -->
     <camera mode="fixed" name="sideview" pos="-0.05651774593317116 1.2761224129427358 1.4879572214102434" quat="0.009905065491771751 0.006877963156909582 0.5912228352893879 0.806418094001364" />
     <!-- teleop view -->
-    <camera mode="fixed" name="teleopview" pos="-0.3 0.1 1.2" euler="0 -1.2 -1.57"/>
+    <!-- <camera mode="fixed" name="teleopview" pos="-0.3 0.1 1.2" euler="0 -1.2 -1.57"/> -->
+    <camera mode="fixed" name="teleopview" pos="-0.5 0 1.35" quat="1 0 0 0"/>
   </worldbody>
 </mujoco>

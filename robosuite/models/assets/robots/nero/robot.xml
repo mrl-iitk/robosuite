@@ -13,10 +13,10 @@
         <mesh name="link6"     file="meshes/link6.stl"/>
         <mesh name="link7"     file="meshes/link7.stl"/>
 
-        <material name="robot_grey" rgba="0.6 0.6 0.6 1"/>
-        <material name="white"      rgba="1 1 1 1"/>
-        <material name="black"      rgba="0.25 0.25 0.25 1"/>
-        <material name="off_white"  rgba="0.9 0.92 0.93 1"/> 
+        <material name="robot_grey" rgba="0.6 0.6 0.6 0.01"/>
+        <material name="white"      rgba="1 1 1 0.01"/>
+        <material name="black"      rgba="0.25 0.25 0.25 0.01"/>
+        <material name="off_white"  rgba="0.9 0.92 0.93 0.01"/> 
     </asset>
 
   <worldbody>
